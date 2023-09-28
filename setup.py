@@ -1,27 +1,35 @@
-"""Setup extension
-
-Notes:
-    If extra_compile_args is provided, you need to provide different instances for different extensions.
-    Refer to https://github.com/pytorch/pytorch/issues/20169
-
-"""
-
-from setuptools import setup
+from setuptools import setup, find_packages, Extension
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+import os
+import sys
 
+python_version = "{}.{}".format(sys.version_info.major, sys.version_info.minor)
+
+try:
+    lib_path = os.path.join(
+        os.environ['CONDA_PREFIX'],
+        f"lib/python{python_version}/site-packages/torch/lib"
+    )
+except KeyError as e:
+    raise KeyError("Couldn't find $CONDA_PREFIX, make sure your environment is activated!")
+
+if not os.path.exists(lib_path):
+    raise FileNotFoundError("Couldn't find {lib_path}, ensure that torch is installed.")
+
+emd_module = CUDAExtension(
+    "emd_cuda",
+    sources=[
+        'cuda/emd.cpp',
+        'cuda/emd_kernel.cu'
+    ],
+    extra_compile_args={'cxx': ['-O2', '-g'], 'nvcc': ['-O2']},
+    extra_link_args=['-Wl,-rpath,' + lib_path]
+)
 
 setup(
-    name='emd_ext',
-    ext_modules=[
-        CUDAExtension(
-            name='emd_cuda',
-            sources=[
-                'cuda/emd.cpp',
-                'cuda/emd_kernel.cu',
-            ],
-            extra_compile_args={'cxx': ['-g'], 'nvcc': ['-O2']}
-        ),
-    ],
-    cmdclass={
-        'build_ext': BuildExtension
-    })
+    name='emd',
+    py_modules=['emd'],
+    ext_modules=[emd_module],
+    cmdclass={'build_ext': BuildExtension},
+    zip_safe=False
+)
